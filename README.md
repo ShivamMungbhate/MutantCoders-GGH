@@ -25,7 +25,7 @@ Our goal is not just to flag suspicious content, but also to **educate users and
 -  **Digital Awareness:** Help users recognize common scam techniques and make informed decisions.
 -  **Privacy Awareness:** Encourage users to avoid sharing sensitive information or clicking unverified links.
 
-## ⚙️ How It Works
+##  How It Works
 
 1. **Input:** The user submits a suspicious message, link, or supported digital content.
 2. **Analysis:** The system analyzes the submitted content using AI.
@@ -68,4 +68,4 @@ Digital Pusher aims to:
 - Personalized digital safety education.
 - Improved detection and evaluation using diverse real-world examples.
 
-**Digital Pusher — Understand the risk. Make safer digital choices.** 🛡️
+**Digital Pusher — Understand the risk. Make safer digital choices.** 
