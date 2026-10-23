@@ -13,3 +13,4 @@ services/ai/audio_cache/
 .env
 .env.*
 node_modules/
+.env.example

@@ -4,12 +4,14 @@ import { env } from './config/env.js';
 import { logger } from './config/logger.js';
 import { seedDemoAccounts } from './utils/seedData.js';
 import { scheduleRetentionJob } from './services/retentionService.js';
+import { submissionQueue } from './services/queue.js';
 
 async function startServer() {
   try {
     await connectDB();
     await seedDemoAccounts();
     scheduleRetentionJob();
+    submissionQueue.start();
 
     const app = createApp();
 
@@ -20,6 +22,7 @@ async function startServer() {
 
     const shutdown = async () => {
       logger.info('Shutting down server gracefully...');
+      submissionQueue.stop();
       server.close(() => {
         logger.info('Server closed');
         process.exit(0);

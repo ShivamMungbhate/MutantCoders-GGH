@@ -46,21 +46,22 @@ export async function processSubmission(submissionId: string): Promise<void> {
       }
     }
 
-    // 2. Call AI service with single retry on Zod invalid response
+    // 2. Call AI service with timeout and resilient port fallback
     let validatedAnalysis: AnalysisContract | null = null;
     let attempt = 0;
     const maxAttempts = 2;
     let lastError: any = null;
+    let targetUrl = `${env.AI_SERVICE_URL.replace('localhost', '127.0.0.1')}/analyze`;
 
     while (attempt < maxAttempts && !validatedAnalysis) {
       attempt++;
       try {
-        const targetUrl = `${env.AI_SERVICE_URL.replace('localhost', '127.0.0.1')}/analyze`;
         logger.info({ targetUrl, attempt, submissionId }, 'Calling AI analysis service');
 
         const aiResponse = await fetch(targetUrl, {
           method: 'POST',
-          body: formData
+          body: formData,
+          signal: AbortSignal.timeout(15000)
         });
 
         if (!aiResponse.ok) {
@@ -82,7 +83,14 @@ export async function processSubmission(submissionId: string): Promise<void> {
         }
       } catch (err: any) {
         lastError = err;
-        logger.warn({ err: err.message, attempt }, 'Error calling AI service');
+        logger.warn({ err: err.message, attempt, targetUrl }, 'Error calling AI service');
+
+        // Resilient local port fallback (5001 <-> 5002) if connection refused
+        if (targetUrl.includes(':5001')) {
+          targetUrl = targetUrl.replace(':5001', ':5002');
+        } else if (targetUrl.includes(':5002')) {
+          targetUrl = targetUrl.replace(':5002', ':5001');
+        }
       }
     }
 
@@ -146,13 +154,15 @@ export async function processSubmission(submissionId: string): Promise<void> {
   }
 }
 
-// In-process fallback queue
+// In-process fallback queue with safe execution and retry dispatching
 class InProcessQueue {
   private queue: string[] = [];
   private processing = false;
 
   async add(submissionId: string) {
-    this.queue.push(submissionId);
+    if (!this.queue.includes(submissionId)) {
+      this.queue.push(submissionId);
+    }
     this.run();
   }
 
@@ -160,27 +170,46 @@ class InProcessQueue {
     if (this.processing) return;
     this.processing = true;
 
-    while (this.queue.length > 0) {
-      const submissionId = this.queue.shift();
-      if (submissionId) {
-        try {
-          await processSubmission(submissionId);
-        } catch (err: any) {
-          logger.error({ err: err.message, submissionId }, 'In-process queue job failed');
+    try {
+      while (this.queue.length > 0) {
+        const submissionId = this.queue.shift();
+        if (submissionId) {
+          try {
+            await processSubmission(submissionId);
+          } catch (err: any) {
+            logger.error({ err: err.message, submissionId }, 'In-process queue job failed');
+
+            // If the job was marked for a retry, schedule re-dispatch
+            try {
+              const sub = await Submission.findById(submissionId);
+              if (sub && sub.status === 'queued') {
+                logger.info(
+                  { submissionId, retryCount: sub.retryCount },
+                  'Scheduling retry dispatch for queued submission'
+                );
+                setTimeout(() => {
+                  this.add(submissionId);
+                }, 2000);
+              }
+            } catch (dbErr: any) {
+              logger.error({ dbErr: dbErr.message }, 'Failed to check submission retry status');
+            }
+          }
         }
       }
+    } finally {
+      this.processing = false;
     }
-
-    this.processing = false;
   }
 }
 
-// Queue Manager: BullMQ with automatic InProcess fallback
+// Queue Manager: BullMQ with automatic InProcess fallback and startup recovery
 export class QueueManager {
   private inProcessQueue: InProcessQueue = new InProcessQueue();
   private bullQueue: Queue | null = null;
   private worker: Worker | null = null;
   private useRedis = false;
+  private recoveryInterval: NodeJS.Timeout | null = null;
 
   constructor() {
     this.init();
@@ -222,6 +251,69 @@ export class QueueManager {
     } catch (err: any) {
       logger.warn({ err: err.message }, 'Unable to connect to Redis. Using in-process queue fallback.');
       this.useRedis = false;
+    }
+  }
+
+  /**
+   * Recovers any submissions in MongoDB that were left queued or stuck processing during restart.
+   */
+  async recoverPendingSubmissions(): Promise<number> {
+    try {
+      const queuedSubs = await Submission.find({ status: 'queued' }).sort({ createdAt: 1 });
+
+      // Recover submissions stuck in 'processing' for > 60 seconds (orphaned by crash)
+      const oneMinuteAgo = new Date(Date.now() - 60000);
+      const stuckSubs = await Submission.find({
+        status: 'processing',
+        updatedAt: { $lt: oneMinuteAgo }
+      });
+
+      for (const sub of stuckSubs) {
+        sub.status = 'queued';
+        await sub.save();
+        queuedSubs.push(sub);
+      }
+
+      for (const sub of queuedSubs) {
+        logger.info({ submissionId: sub._id }, 'Recovering and enqueuing pending submission');
+        await this.enqueue(sub._id.toString());
+      }
+
+      if (queuedSubs.length > 0) {
+        logger.info({ count: queuedSubs.length }, 'Recovered pending submissions from database');
+      }
+      return queuedSubs.length;
+    } catch (err: any) {
+      logger.error({ err: err.message }, 'Failed to recover pending submissions');
+      return 0;
+    }
+  }
+
+  /**
+   * Starts the worker/queue manager and initializes recovery sweeps.
+   */
+  start(): void {
+    // Initial recovery on startup
+    this.recoverPendingSubmissions();
+
+    // Periodic sweep for in-process mode (every 15s) to guarantee no submission stays orphaned
+    if (!this.useRedis && !this.recoveryInterval) {
+      this.recoveryInterval = setInterval(() => {
+        this.recoverPendingSubmissions();
+      }, 15000);
+    }
+  }
+
+  /**
+   * Graceful shutdown of the queue manager.
+   */
+  stop(): void {
+    if (this.recoveryInterval) {
+      clearInterval(this.recoveryInterval);
+      this.recoveryInterval = null;
+    }
+    if (this.worker) {
+      this.worker.close();
     }
   }
 
