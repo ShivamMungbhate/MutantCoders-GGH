@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Digital Pusher: Link Guardian</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="dp-popup">
+    <!-- Top Header -->
+    <header class="dp-header">
+      <div class="dp-logo-group">
+        <span class="dp-logo-icon">🛡️</span>
+        <div>
+          <h1 class="dp-title">Digital Pusher</h1>
+          <span class="dp-tagline">Link Guardian</span>
+        </div>
+      </div>
+      <button id="lang-toggle" class="dp-lang-btn" type="button" title="Switch English / Hindi">
+        English
+      </button>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="dp-main">
+      <!-- Active Tab Section -->
+      <section class="dp-card dp-current-card">
+        <div class="dp-card-header">
+          <span class="dp-section-label" id="lbl-current-site">Current Webpage</span>
+          <button id="check-current-btn" class="dp-btn-refresh" type="button" title="Refresh analysis for this page">
+            ↻ Check This Page
+          </button>
+        </div>
+
+        <div id="current-host-display" class="dp-host-name">Checking...</div>
+
+        <!-- Result Badge & Explanation -->
+        <div id="current-result-container" class="dp-result-container">
+          <div id="current-badge" class="dp-badge dp-badge-neutral">
+            <span class="dp-badge-dot"></span>
+            <span id="current-badge-text">Evaluating...</span>
+          </div>
+
+          <p id="current-explanation" class="dp-explanation">
+            Inspecting the site address with privacy heuristics...
+          </p>
+
+          <!-- Detected Signals List -->
+          <div id="current-signals-box" class="dp-signals-box" style="display: none;">
+            <span class="dp-signals-title" id="lbl-signals">Detected Warning Signals:</span>
+            <ul id="current-signals-list" class="dp-signals-list"></ul>
+          </div>
+
+          <!-- Mandatory Disclaimer -->
+          <p class="dp-disclaimer">
+            * No warning signs found does not guarantee a site is safe.
+          </p>
+        </div>
+      </section>
+
+      <!-- Paste Custom Link Section -->
+      <section class="dp-card">
+        <label for="custom-url-input" class="dp-section-label" id="lbl-check-link">
+          Check Any Pasted Link
+        </label>
+        <div class="dp-input-group">
+          <input
+            type="text"
+            id="custom-url-input"
+            class="dp-input"
+            placeholder="Paste suspicious link here..."
+            aria-label="Paste link to test"
+          />
+          <button id="custom-check-btn" class="dp-btn-primary" type="button">
+            Inspect
+          </button>
+        </div>
+
+        <!-- Custom Result Box -->
+        <div id="custom-result-area" class="dp-custom-result" style="display: none;"></div>
+      </section>
+
+      <!-- Opt-In Auto Check Feature -->
+      <section class="dp-card dp-optin-card">
+        <div class="dp-toggle-row">
+          <label class="dp-switch">
+            <input type="checkbox" id="auto-check-toggle">
+            <span class="dp-slider round"></span>
+          </label>
+          <label for="auto-check-toggle" class="dp-toggle-label" id="lbl-auto-check">
+            Auto-check pages I open (Off by default)
+          </label>
+        </div>
+        <p class="dp-privacy-note" id="lbl-privacy-note">
+          🔒 <strong>Privacy Guarantee:</strong> Only the website domain name is checked. Browsing history, passwords, form entries, and page contents are NEVER scanned or stored. You can pause anytime.
+        </p>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="dp-footer">
+      <a href="#" id="open-options-link" class="dp-footer-link">Extension Settings & Ignore List</a>
+      <span class="dp-footer-ver">v1.0.0</span>
+    </footer>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
